@@ -127,6 +127,13 @@ static bool game_fetch_preset(int i, char **name, game_params **params)
         *name = dupstr("Hard");
         break;
     
+    case 3:
+        ret->ncolours = 12;
+        ret->ntubes = 14;
+        ret->nlayers = 4;
+        *name = dupstr("Testing");
+        break;
+    
     default:
         free_params(ret);
         return false;
@@ -510,14 +517,14 @@ static const unsigned long palette_default[MAX_COLOURS] = {
     0x48B4EA,
     0xEB760C,
     0xEA6F8E,
-    0xE30F66,
+    0xFF3B9D,
     0xFBE121,
-    0xE4073A,
+    0xCD212A,
     0x9077B4,
-    0x58C5BE,
+    0x0064FF,
     0x7D318C,
     0x3E9B43,
-    0x2F7ABF,
+    0x0000FF,
 };
 
 static float *game_colours(frontend *fe, int *ncolours)
@@ -525,7 +532,7 @@ static float *game_colours(frontend *fe, int *ncolours)
     float *ret = snewn(3 * NCOLOURS, float);
     int c;
 
-    for (c = 0; c < 8; c++) {
+    for (c = 0; c < MAX_COLOURS; c++) {
          ret[(COL_0 + c) * 3 + 0] = (float)
             ((palette_default[c] & 0xff0000) >> 16) / 256.0F;
          ret[(COL_0 + c) * 3 + 1] = (float)
@@ -554,7 +561,7 @@ static game_drawstate *game_new_drawstate(drawing *dr, const game_state *state)
 
     for (tube = 0; tube < state->p.ntubes; tube++) {
         for (layer = 0; layer < state->p.nlayers; layer++) {
-            ds->tubes[tube][layer] = state->tubes[tube][layer];
+            ds->tubes[tube][layer] = -2;
         }
     }
 
@@ -586,8 +593,25 @@ static void game_redraw(drawing *dr, game_drawstate *ds,
             ty += TUBE_SPACING + ds->tilesize * (state->p.nlayers + 1);
             tx = MARGIN_H + (tube - wrap) * (ds->tilesize + TUBE_SPACING);
         }
+
+        for (layer = 0; layer < state->p.nlayers; layer++) {
+            int color = state->tubes[tube][layer];
+            if (color != ds->tubes[tube][layer]) {
+                ds->tubes[tube][layer] = color;
+                int y = ty + ds->tilesize * (state->p.nlayers - layer - 1);
+                if (color >= 0)
+                    draw_rect(dr, tx, y, ds->tilesize, ds->tilesize,
+                            COL_0 + color);
+                else
+                    draw_rect(dr, tx, y, ds->tilesize, ds->tilesize,
+                            COL_BACKGROUND);
+            }
+        }
+
         draw_rect_outline(dr, tx, ty, ds->tilesize, ds->tilesize * state->p.nlayers, COL_TUBE);
     }
+
+    if (!ds->started) ds->started = true;
 }
 
 static float game_anim_length(const game_state *oldstate,

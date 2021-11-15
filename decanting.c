@@ -14,8 +14,10 @@
 enum {
     MAX_LAYERS = 8,
     MAX_COLOURS = 12,
-    MAX_TUBES = 16
+    MAX_TUBES = 16,
+    MAX_DESC = MAX_TUBES*(MAX_LAYERS+1)
 };
+
 
 enum {
     COL_0,
@@ -54,6 +56,25 @@ struct game_state {
     struct game_params p;
     signed char tubes[MAX_TUBES][MAX_LAYERS];
 };
+
+static void free_game(game_state *state)
+{
+    sfree(state);
+}
+
+static void free_ui(game_ui *ui)
+{
+}
+
+static void game_free_drawstate(drawing *dr, game_drawstate *ds)
+{
+    sfree(ds);
+}
+
+static void free_params(game_params *params)
+{
+    sfree(params);
+}
 
 static game_params *default_params(void)
 {
@@ -94,17 +115,12 @@ static bool game_fetch_preset(int i, char **name, game_params **params)
         break;
     
     default:
-        sfree(ret);
+        free_params(ret);
         return false;
     }
 
     *params = ret;
     return true;
-}
-
-static void free_params(game_params *params)
-{
-    sfree(params);
 }
 
 static game_params *dup_params(const game_params *params)
@@ -219,10 +235,43 @@ static const char *validate_params(const game_params *params, bool full)
     return NULL;
 }
 
+static char *game_desc(const game_state *state)
+{
+    char buf[MAX_DESC];
+    int tube, layer, c = 0;
+    for (tube = 0; tube < state->p.ntubes; tube++) {
+        for (layer = state->p.nlayers -1; layer >= 0; layer--) {
+            if (state->tubes[tube][layer] != -1)
+                buf[c++] = HEX[state->tubes[tube][layer]];
+        }
+        buf[c++] = ',';
+    }
+    buf[c - 1] = 0;
+    return dupstr(buf);
+}
+
 static char *new_game_desc(const game_params *params, random_state *rs,
 			   char **aux, bool interactive)
 {
-    return dupstr("FIXME");
+    int tube, layer;
+    game_state *state = snew(game_state);
+    char *ret;
+    state->p = *params;
+
+    for (tube = 0; tube < params->ncolours; tube++) {
+        for (layer = 0; layer < params->nlayers; layer++) {
+            state->tubes[tube][layer] = (char)tube;
+        }
+    }
+    for (; tube < params->ntubes; tube++) {
+        for (layer = 0; layer < params->nlayers; layer++) {
+            state->tubes[tube][layer] = -1;
+        }
+    }
+
+    ret = game_desc(state);
+    free_game(state);
+    return ret;
 }
 
 static const char *validate_desc(const game_params *params, const char *desc)
@@ -233,17 +282,36 @@ static const char *validate_desc(const game_params *params, const char *desc)
 static game_state *new_game(midend *me, const game_params *params,
                             const char *desc)
 {
-    int tube, layer;
+    int tube, layer, c;
+    char token;
     game_state *state = snew(game_state);
 
     state->solved = false;
     state->p = *params;
 
-    for (tube = 0; tube < params->ncolours; tube++) {
-        for (layer = 0; layer < params->nlayers; layer++) {
-            state->tubes[tube][layer] = (char)tube;
+    tube = layer = c = 0;
+
+    do {
+        token = desc[c++];
+        if (token == ',' || token == 0) {
+            for (; layer < params->nlayers; layer++) {
+                state->tubes[tube][layer] = -1;
+            }
+            tube++;
+            layer = 0;
         }
-    }
+        if (layer >= params->nlayers) continue;
+        if (token >= '0' && token <= '9') {
+            state->tubes[tube][layer++] = token - '0';
+        }
+        if (token >= 'a' && token <= 'f') {
+            state->tubes[tube][layer++] = token - 'a' + 10;
+        }
+        if (token >= 'A' && token <= 'F') {
+            state->tubes[tube][layer++] = token - 'A' + 10;
+        }
+    } while(token && c <= MAX_DESC);
+
     for (; tube < params->ntubes; tube++) {
         for (layer = 0; layer < params->nlayers; layer++) {
             state->tubes[tube][layer] = -1;
@@ -268,11 +336,6 @@ static game_state *dup_game(const game_state *state)
     }
 
     return ret;
-}
-
-static void free_game(game_state *state)
-{
-    sfree(state);
 }
 
 static char *solve_game(const game_state *state, const game_state *currstate,
@@ -307,10 +370,6 @@ static char *game_text_format(const game_state *state)
 static game_ui *new_ui(const game_state *state)
 {
     return NULL;
-}
-
-static void free_ui(game_ui *ui)
-{
 }
 
 static char *encode_ui(const game_ui *ui)
@@ -406,11 +465,6 @@ static game_drawstate *game_new_drawstate(drawing *dr, const game_state *state)
     ds->FIXME = 0;
 
     return ds;
-}
-
-static void game_free_drawstate(drawing *dr, game_drawstate *ds)
-{
-    sfree(ds);
 }
 
 static void game_redraw(drawing *dr, game_drawstate *ds,

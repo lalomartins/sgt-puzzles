@@ -29,6 +29,11 @@ puzzle(cube
   DESCRIPTION "Rolling cube puzzle"
   OBJECTIVE "Pick up all the blue squares by rolling the cube over them.")
 
+puzzle(decanting
+  DISPLAYNAME "Decanting"
+  DESCRIPTION "Fluid sort puzzle"
+  OBJECTIVE "Pour fluid from one vial to another until they're all uniform.")
+
 puzzle(dominosa
   DISPLAYNAME "Dominosa"
   DESCRIPTION "Domino tiling puzzle"

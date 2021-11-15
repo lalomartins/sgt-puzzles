@@ -40,6 +40,8 @@ enum {
     NCOLOURS
 };
 
+static const char HEX[16] = "0123456789abcdef";
+
 struct game_params {
     int ncolours;
     int ntubes;
@@ -48,7 +50,9 @@ struct game_params {
 };
 
 struct game_state {
-    int FIXME;
+    bool solved;
+    struct game_params p;
+    signed char tubes[MAX_LAYERS][MAX_TUBES];
 };
 
 static game_params *default_params(void)
@@ -225,18 +229,34 @@ static const char *validate_desc(const game_params *params, const char *desc)
 static game_state *new_game(midend *me, const game_params *params,
                             const char *desc)
 {
+    int tube, layer;
     game_state *state = snew(game_state);
 
-    state->FIXME = 0;
+    state->solved = false;
+    state->p = *params;
+
+    for (tube = 0; tube < params->ntubes; tube++) {
+        for (layer = 0; layer < params->nlayers; layer++) {
+            state->tubes[tube][layer] = -1;
+        }
+    }
 
     return state;
 }
 
 static game_state *dup_game(const game_state *state)
 {
+    int tube, layer;
     game_state *ret = snew(game_state);
 
-    ret->FIXME = state->FIXME;
+    ret->solved = state->solved;
+    ret->p = state->p;
+
+    for (tube = 0; tube < ret->p.ntubes; tube++) {
+        for (layer = 0; layer < ret->p.nlayers; layer++) {
+            ret->tubes[tube][layer] = state->tubes[tube][layer];
+        }
+    }
 
     return ret;
 }
@@ -259,7 +279,20 @@ static bool game_can_format_as_text_now(const game_params *params)
 
 static char *game_text_format(const game_state *state)
 {
-    return NULL;
+    char buf[MAX_TUBES*MAX_LAYERS*2 + 1];
+    int tube, layer, c = 0;
+    for (layer = state->p.nlayers -1; layer >= 0; layer--) {
+        for (tube = 0; tube < state->p.ntubes; tube++) {
+            if (state->tubes[tube][layer] == -1)
+                buf[c++] = ' ';
+            else
+                buf[c++] = HEX[state->tubes[tube][layer]];
+            buf[c++] = ' ';
+        }
+        buf[c - 1] = '\n';
+    }
+    buf[c] = 0;
+    return dupstr(buf);
 }
 
 static game_ui *new_ui(const game_state *state)
@@ -384,6 +417,7 @@ static void game_redraw(drawing *dr, game_drawstate *ds,
      */
     draw_rect(dr, 0, 0, 10*ds->tilesize, 10*ds->tilesize, COL_BACKGROUND);
     draw_update(dr, 0, 0, 10*ds->tilesize, 10*ds->tilesize);
+    status_bar(dr, "0 moves");
 }
 
 static float game_anim_length(const game_state *oldstate,

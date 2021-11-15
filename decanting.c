@@ -506,7 +506,7 @@ static void get_tube_top(const game_state *state, int tube, int *color, int *num
                 if (empty) *empty = state->p.nlayers - layer - 1;
                 *number = 1;
                 while (--layer >= 0) {
-                    if (*color == state->tubes[tube][layer]) number++;
+                    if (*color == state->tubes[tube][layer]) (*number)++;
                     else break;
                 }
                 return;
@@ -526,7 +526,7 @@ static int can_pour(const game_state *state, int tube_from, int tube_to)
     }
 
     // destination is full
-    if (state->tubes[tube_to][state->p.nlayers - 1] == -1) return 0;
+    if (state->tubes[tube_to][state->p.nlayers - 1] != -1) return 0;
 
     {
         int color_from, number_from, color_to, number_to, empty;
@@ -571,6 +571,28 @@ static game_state *execute_move(const game_state *state, const char *move)
     int tube_from, tube_to, number;
     if (sscanf(move, "p %d %d %d", &tube_from, &tube_to, &number)) {
         game_state *new_state = dup_game(state);
+        int layer = state->p.nlayers - 1, layer_end, color;
+        while (layer > 0 && state->tubes[tube_from][layer] == -1)
+            layer--;
+        if (layer < number - 1) {
+            free_game(new_state);
+            return NULL;
+        }
+        layer_end = layer - number;
+        color = state->tubes[tube_from][layer];
+        while (layer > layer_end)
+            new_state->tubes[tube_from][layer--] = -1;
+        layer = state->p.nlayers - 1;
+        while (layer >= 0 && state->tubes[tube_to][layer] == -1)
+            layer--;
+        if (state->p.nlayers - layer < number) {
+            free_game(new_state);
+            return NULL;
+        }
+        layer_end = ++layer + number;
+        while (layer < layer_end)
+            new_state->tubes[tube_to][layer++] = color;
+        return new_state;
     }
     return NULL;
 }
@@ -612,7 +634,7 @@ static const unsigned long palette_default[MAX_COLOURS] = {
     0x48B4EA,
     0xEB760C,
     0xEA6F8E,
-    0xFF3B9D,
+    0xF6237E,
     0xFBE121,
     0xCD212A,
     0x9077B4,

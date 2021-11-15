@@ -21,9 +21,9 @@ enum {
 enum {
     TILE_SIZE = 20,
     TUBE_BORDER = 2,
-    TUBE_SPACING = 5,
-    MARGIN_H = 10,
-    MARGIN_V = 20,
+    TUBE_SPACING = 10,
+    MARGIN_H = 20,
+    MARGIN_V = 30,
     WRAP_TUBES = 5
 };
 
@@ -484,7 +484,7 @@ static void game_compute_size(const game_params *params, int tilesize,
     /* Ideally we'd like a different wrap width for portrait
      * vs. landscape screens, but we don't have that info atm */
     if (params->ntubes > WRAP_TUBES) {
-        tubes_x = params->ntubes + 1 / 2;
+        tubes_x = (params->ntubes + 1) / 2;
         tubes_y = 2;
     } else {
         tubes_x = params->ntubes;
@@ -566,11 +566,27 @@ static void game_redraw(drawing *dr, game_drawstate *ds,
                         int dir, const game_ui *ui,
                         float animtime, float flashtime)
 {
+    int wrap = MAX_TUBES;
+    int tube, layer;
+
     if (!ds->started) {
         int w, h;
         game_compute_size(&state->p, ds->tilesize, &w, &h);
         draw_rect(dr, 0, 0, w, h, COL_BACKGROUND);
         draw_update(dr, 0, 0, w, h);
+    }
+
+    if (state->p.ntubes > WRAP_TUBES)
+        wrap = (state->p.ntubes + 1) / 2;
+    
+    for (tube = 0; tube < state->p.ntubes; tube++) {
+        int tx = MARGIN_H + tube * (ds->tilesize + TUBE_SPACING);
+        int ty = MARGIN_V + ds->tilesize;
+        if (tube >= wrap) {
+            ty += TUBE_SPACING + ds->tilesize * (state->p.nlayers + 1);
+            tx = MARGIN_H + (tube - wrap) * (ds->tilesize + TUBE_SPACING);
+        }
+        draw_rect_outline(dr, tx, ty, ds->tilesize, ds->tilesize * state->p.nlayers, COL_TUBE);
     }
 }
 
@@ -596,7 +612,7 @@ static void game_get_cursor_location(const game_ui *ui,
 
 static int game_status(const game_state *state)
 {
-    return 0;
+    return state->solved ? 1 : 0;
 }
 
 static bool game_timing_state(const game_state *state, game_ui *ui)

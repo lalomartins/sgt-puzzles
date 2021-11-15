@@ -52,7 +52,7 @@ struct game_params {
 struct game_state {
     bool solved;
     struct game_params p;
-    signed char tubes[MAX_LAYERS][MAX_TUBES];
+    signed char tubes[MAX_TUBES][MAX_LAYERS];
 };
 
 static game_params *default_params(void)
@@ -211,7 +211,11 @@ static const char *validate_params(const game_params *params, bool full)
     if (params->ncolours < 2) return "Colours must be at least 2";
     if (params->nlayers < 2) return "Layers must be at least 2";
     if (params->ntubes < 3) return "Tubes must be at least 3";
-    if (params->ntubes <= params->ncolours) return "There must be more tubes than colours";
+    if (params->ncolours > MAX_COLOURS) return "Too many colours";
+    if (params->nlayers > MAX_LAYERS) return "Too many layers";
+    if (params->ntubes > MAX_TUBES) return "Too many tubes";
+    if (params->ntubes <= params->ncolours)
+            return "There must be more tubes than colours";
     return NULL;
 }
 
@@ -235,7 +239,12 @@ static game_state *new_game(midend *me, const game_params *params,
     state->solved = false;
     state->p = *params;
 
-    for (tube = 0; tube < params->ntubes; tube++) {
+    for (tube = 0; tube < params->ncolours; tube++) {
+        for (layer = 0; layer < params->nlayers; layer++) {
+            state->tubes[tube][layer] = (char)tube;
+        }
+    }
+    for (; tube < params->ntubes; tube++) {
         for (layer = 0; layer < params->nlayers; layer++) {
             state->tubes[tube][layer] = -1;
         }
@@ -284,7 +293,7 @@ static char *game_text_format(const game_state *state)
     for (layer = state->p.nlayers -1; layer >= 0; layer--) {
         for (tube = 0; tube < state->p.ntubes; tube++) {
             if (state->tubes[tube][layer] == -1)
-                buf[c++] = ' ';
+                buf[c++] = '_';
             else
                 buf[c++] = HEX[state->tubes[tube][layer]];
             buf[c++] = ' ';

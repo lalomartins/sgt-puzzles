@@ -18,6 +18,14 @@ enum {
     MAX_DESC = MAX_TUBES*(MAX_LAYERS+1)
 };
 
+enum {
+    TILE_SIZE = 20,
+    TUBE_BORDER = 2,
+    TUBE_SPACING = 5,
+    MARGIN_H = 10,
+    MARGIN_V = 20,
+    WRAP_TUBES = 5
+};
 
 enum {
     COL_0,
@@ -57,6 +65,10 @@ struct game_state {
     signed char tubes[MAX_TUBES][MAX_LAYERS];
 };
 
+struct game_ui {
+    int selected;
+};
+
 static void free_game(game_state *state)
 {
     sfree(state);
@@ -64,6 +76,7 @@ static void free_game(game_state *state)
 
 static void free_ui(game_ui *ui)
 {
+    sfree(ui);
 }
 
 static void game_free_drawstate(drawing *dr, game_drawstate *ds)
@@ -258,6 +271,15 @@ static char *new_game_desc(const game_params *params, random_state *rs,
     char *ret;
     state->p = *params;
 
+    /* FIXME special case for development */
+    if (params->ncolours == 12 && params->nlayers == 4) {
+        free_game(state);
+        return dupstr(
+            "11a8,9437,b672,2632,856a,aba5,067b,"
+            "0370,8194,495b,8059,2314");
+    }
+    /* /FIXME end */
+
     for (tube = 0; tube < params->ncolours; tube++) {
         for (layer = 0; layer < params->nlayers; layer++) {
             state->tubes[tube][layer] = (char)tube;
@@ -413,7 +435,9 @@ static char *game_text_format(const game_state *state)
 
 static game_ui *new_ui(const game_state *state)
 {
-    return NULL;
+    game_ui *ui = snew(game_ui);
+    ui->selected = -1;
+    return ui;
 }
 
 static char *encode_ui(const game_ui *ui)
@@ -432,7 +456,9 @@ static void game_changed_state(game_ui *ui, const game_state *oldstate,
 
 struct game_drawstate {
     int tilesize;
-    int FIXME;
+    bool started;
+    int selected;
+    signed char tubes[MAX_TUBES][MAX_LAYERS];
 };
 
 static char *interpret_move(const game_state *state, game_ui *ui,
@@ -454,7 +480,23 @@ static game_state *execute_move(const game_state *state, const char *move)
 static void game_compute_size(const game_params *params, int tilesize,
                               int *x, int *y)
 {
-    *x = *y = 10 * tilesize;	       /* FIXME */
+    int tubes_x, tubes_y;
+    /* Ideally we'd like a different wrap width for portrait
+     * vs. landscape screens, but we don't have that info atm */
+    if (params->ntubes > WRAP_TUBES) {
+        tubes_x = params->ntubes + 1 / 2;
+        tubes_y = 2;
+    } else {
+        tubes_x = params->ntubes;
+        tubes_y = 1;
+    }
+
+    *x = MARGIN_H * 2
+        + tubes_x * tilesize
+        + (tubes_x - 1) * TUBE_SPACING;
+    *y = MARGIN_V * 2
+        + tubes_y * tilesize * (params->nlayers + 1)
+        + (tubes_y - 1) * TUBE_SPACING;
 }
 
 static void game_set_size(drawing *dr, game_drawstate *ds,
@@ -503,10 +545,18 @@ static float *game_colours(frontend *fe, int *ncolours)
 
 static game_drawstate *game_new_drawstate(drawing *dr, const game_state *state)
 {
+    int tube, layer;
     struct game_drawstate *ds = snew(struct game_drawstate);
 
     ds->tilesize = 0;
-    ds->FIXME = 0;
+    ds->selected = -1;
+    ds->started = false;
+
+    for (tube = 0; tube < state->p.ntubes; tube++) {
+        for (layer = 0; layer < state->p.nlayers; layer++) {
+            ds->tubes[tube][layer] = state->tubes[tube][layer];
+        }
+    }
 
     return ds;
 }
@@ -516,15 +566,12 @@ static void game_redraw(drawing *dr, game_drawstate *ds,
                         int dir, const game_ui *ui,
                         float animtime, float flashtime)
 {
-    /*
-     * The initial contents of the window are not guaranteed and
-     * can vary with front ends. To be on the safe side, all games
-     * should start by drawing a big background-colour rectangle
-     * covering the whole window.
-     */
-    draw_rect(dr, 0, 0, 10*ds->tilesize, 10*ds->tilesize, COL_BACKGROUND);
-    draw_update(dr, 0, 0, 10*ds->tilesize, 10*ds->tilesize);
-    status_bar(dr, "0 moves");
+    if (!ds->started) {
+        int w, h;
+        game_compute_size(&state->p, ds->tilesize, &w, &h);
+        draw_rect(dr, 0, 0, w, h, COL_BACKGROUND);
+        draw_update(dr, 0, 0, w, h);
+    }
 }
 
 static float game_anim_length(const game_state *oldstate,
@@ -594,7 +641,7 @@ const struct game thegame = {
     game_changed_state,
     interpret_move,
     execute_move,
-    20 /* FIXME */, game_compute_size, game_set_size,
+    TILE_SIZE + TUBE_BORDER * 2, game_compute_size, game_set_size,
     game_colours,
     game_new_drawstate,
     game_free_drawstate,
@@ -604,7 +651,7 @@ const struct game thegame = {
     game_get_cursor_location,
     game_status,
     false, false, game_print_size, game_print,
-    true,			       /* wants_statusbar */
+    false,			       /* wants_statusbar */
     false, game_timing_state,
     0,				       /* flags */
 };

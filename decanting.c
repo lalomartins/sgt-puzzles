@@ -465,8 +465,25 @@ struct game_drawstate {
     int tilesize;
     bool started;
     int selected;
+    bool solved;
     signed char tubes[MAX_TUBES][MAX_LAYERS];
 };
+
+static void check_solved(game_state *state)
+{
+    int tube, layer, color;
+    if (state->solved) return;
+
+    for (tube = 0; tube < state->p.ntubes; tube++) {
+        if (state->tubes[tube][0] == -1) continue;
+        color = state->tubes[tube][0];
+        for (layer = 1; layer < state->p.nlayers; layer++) {
+            if (state->tubes[tube][layer] != color) return;
+        }
+    }
+
+    state->solved = true;
+}
 
 static int get_tube_at(const game_state *state, const game_drawstate *ds,
                         int x, int y)
@@ -542,6 +559,8 @@ static char *interpret_move(const game_state *state, game_ui *ui,
                             const game_drawstate *ds,
                             int x, int y, int button)
 {
+    if (state->solved) return NULL;
+
     if (button == LEFT_BUTTON) {
         int tube = get_tube_at(state, ds, x, y);
         if (tube == -1) return NULL;
@@ -592,6 +611,8 @@ static game_state *execute_move(const game_state *state, const char *move)
         layer_end = ++layer + number;
         while (layer < layer_end)
             new_state->tubes[tube_to][layer++] = color;
+
+        check_solved(new_state);
         return new_state;
     }
     return NULL;
@@ -675,6 +696,7 @@ static game_drawstate *game_new_drawstate(drawing *dr, const game_state *state)
     ds->tilesize = 0;
     ds->selected = -1;
     ds->started = false;
+    ds->solved = false;
 
     for (tube = 0; tube < state->p.ntubes; tube++) {
         for (layer = 0; layer < state->p.nlayers; layer++) {
@@ -698,6 +720,19 @@ static void game_redraw(drawing *dr, game_drawstate *ds,
         game_compute_size(&state->p, ds->tilesize, &w, &h);
         draw_rect(dr, 0, 0, w, h, COL_BACKGROUND);
         draw_update(dr, 0, 0, w, h);
+    }
+    if (state->solved != ds->solved) {
+        int w, h;
+        game_compute_size(&state->p, ds->tilesize, &w, &h);
+        draw_rect(dr, 0, 0, w, h, state->solved ? COL_0 : COL_BACKGROUND);
+        draw_update(dr, 0, 0, w, h);
+        for (tube = 0; tube < state->p.ntubes; tube++) {
+            for (layer = 0; layer < state->p.nlayers; layer++) {
+                ds->tubes[tube][layer] = -2;
+            }
+        }
+        ds->selected = -1;
+        ds->solved = state->solved;
     }
 
     if (state->p.ntubes > WRAP_TUBES)

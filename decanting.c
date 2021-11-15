@@ -276,6 +276,50 @@ static char *new_game_desc(const game_params *params, random_state *rs,
 
 static const char *validate_desc(const game_params *params, const char *desc)
 {
+    int tube, layer, c;
+    char token, ftype;
+    char amounts[MAX_COLOURS];
+
+    tube = layer = c = 0;
+    for (ftype = 0; ftype < params->ncolours; ftype++)
+        amounts[ftype] = 0;
+
+    while(c < MAX_DESC && (token = desc[c++])) {
+        if (token == ',') {
+            tube++;
+            if (tube >= params->ntubes)
+                return "Too many tubes";
+            layer = 0;
+        }
+        else {
+            if (layer >= params->nlayers)
+                return "Too many layers in tube";
+
+            if (token >= '0' && token <= '9') {
+                ftype = token - '0';
+                layer++;
+            }
+            else if (token >= 'a' && token <= 'f') {
+                ftype = token - 'a' + 10;
+                layer++;
+            }
+            else if (token >= 'A' && token <= 'F') {
+                ftype = token - 'A' + 10;
+                layer++;
+            }
+            else return "Invalid character";
+
+            if (ftype > params->ncolours)
+                return "Invalid color";
+            if (++amounts[ftype] > params->nlayers)
+                return "Too much fluid of the same type";
+        }
+    }
+
+    for (ftype = 0; ftype < params->ncolours; ftype++)
+        if (amounts[ftype] < params->nlayers)
+            return "Not enough fluid of at least one type";
+
     return NULL;
 }
 

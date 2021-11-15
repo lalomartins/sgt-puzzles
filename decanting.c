@@ -468,10 +468,43 @@ struct game_drawstate {
     signed char tubes[MAX_TUBES][MAX_LAYERS];
 };
 
+static int get_tube_at(const game_state *state, const game_drawstate *ds,
+                        int x, int y)
+{
+    int tube = -1, tx, wrap = MAX_TUBES;
+    
+    if (x <= MARGIN_H || y <= MARGIN_V) return -1;
+
+    tube = (x - MARGIN_H) / (ds->tilesize + TUBE_SPACING);
+    tx = MARGIN_H + tube * (ds->tilesize + TUBE_SPACING);
+    // click between tubes or to the right of the last one
+    if (x - tx > ds->tilesize) return -1;
+
+    if (y > MARGIN_V + ds->tilesize * (state->p.nlayers + 1)) {
+        if (state->p.ntubes > WRAP_TUBES) {
+            y -= MARGIN_V + ds->tilesize * (state->p.nlayers + 1);
+            if (y > ds->tilesize * (state->p.nlayers + 1))
+                return -1;
+            wrap = (state->p.ntubes + 1) / 2;
+            tube += wrap;
+        } else return -1;
+    }
+
+    return tube;
+}
+
 static char *interpret_move(const game_state *state, game_ui *ui,
                             const game_drawstate *ds,
                             int x, int y, int button)
 {
+    if (button == LEFT_BUTTON) {
+        int tube = get_tube_at(state, ds, x, y);
+        if (tube == -1) return NULL;
+        if (tube == ui->selected) ui->selected = -1;
+        else ui->selected = tube;
+        return UI_UPDATE;
+    }
+
     return NULL;
 }
 
@@ -587,16 +620,26 @@ static void game_redraw(drawing *dr, game_drawstate *ds,
         wrap = (state->p.ntubes + 1) / 2;
     
     for (tube = 0; tube < state->p.ntubes; tube++) {
+        bool tube_update = ds->selected != ui->selected
+            && (ds->selected == tube || ui->selected == tube);
+        bool did_update = false;
         int tx = MARGIN_H + tube * (ds->tilesize + TUBE_SPACING);
-        int ty = MARGIN_V + ds->tilesize;
+        int ty = MARGIN_V;
+        int ty_base = ty;
         if (tube >= wrap) {
             ty += TUBE_SPACING + ds->tilesize * (state->p.nlayers + 1);
+            ty_base = ty;
             tx = MARGIN_H + (tube - wrap) * (ds->tilesize + TUBE_SPACING);
+        }
+        if (ui->selected != tube) ty += ds->tilesize;
+
+        if (tube_update) {
+            draw_rect(dr, tx, ty_base, ds->tilesize, ds->tilesize * (state->p.nlayers + 1), COL_BACKGROUND);
         }
 
         for (layer = 0; layer < state->p.nlayers; layer++) {
             int color = state->tubes[tube][layer];
-            if (color != ds->tubes[tube][layer]) {
+            if (tube_update || color != ds->tubes[tube][layer]) {
                 ds->tubes[tube][layer] = color;
                 int y = ty + ds->tilesize * (state->p.nlayers - layer - 1);
                 if (color >= 0)
@@ -605,12 +648,17 @@ static void game_redraw(drawing *dr, game_drawstate *ds,
                 else
                     draw_rect(dr, tx, y, ds->tilesize, ds->tilesize,
                             COL_BACKGROUND);
+                did_update = true;
             }
         }
 
-        draw_rect_outline(dr, tx, ty, ds->tilesize, ds->tilesize * state->p.nlayers, COL_TUBE);
+        if (did_update) {
+            draw_rect_outline(dr, tx, ty, ds->tilesize, ds->tilesize * state->p.nlayers, COL_TUBE);
+            draw_update(dr, tx, ty_base, ds->tilesize, ds->tilesize * (state->p.nlayers + 1));
+        }
     }
 
+    ds->selected = ui->selected;
     if (!ds->started) ds->started = true;
 }
 

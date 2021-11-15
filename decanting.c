@@ -36,6 +36,7 @@ enum {
     COL_15,
     COL_BACKGROUND,
     COL_TUBE,
+    COL_HIDDEN,
     NCOLOURS
 };
 
@@ -64,7 +65,37 @@ static game_params *default_params(void)
 
 static bool game_fetch_preset(int i, char **name, game_params **params)
 {
-    return false;
+    game_params *ret;
+    ret = default_params();
+
+    switch (i)
+    {
+    case 0:
+        ret->ncolours = 4;
+        ret->ntubes = 6;
+        *name = dupstr("Easy");
+        break;
+    
+    case 1:
+        ret->ncolours = 7;
+        ret->ntubes = 9;
+        *name = dupstr("Default");
+        break;
+    
+    case 2:
+        ret->ncolours = 12;
+        ret->ntubes = 14;
+        ret->nlayers = 5;
+        *name = dupstr("Hard");
+        break;
+    
+    default:
+        sfree(ret);
+        return false;
+    }
+
+    *params = ret;
+    return true;
 }
 
 static void free_params(game_params *params)
@@ -129,12 +160,46 @@ static char *encode_params(const game_params *params, bool full)
 
 static config_item *game_configure(const game_params *params)
 {
-    return NULL;
+    config_item *ret;
+    char buf[80];
+
+    ret = snewn(5, config_item);
+
+    ret[0].name = "Colours";
+    ret[0].type = C_STRING;
+    sprintf(buf, "%d", params->ncolours);
+    ret[0].u.string.sval = dupstr(buf);
+
+    ret[1].name = "Tubes";
+    ret[1].type = C_STRING;
+    sprintf(buf, "%d", params->ntubes);
+    ret[1].u.string.sval = dupstr(buf);
+
+    ret[2].name = "Layers";
+    ret[2].type = C_STRING;
+    sprintf(buf, "%d", params->nlayers);
+    ret[2].u.string.sval = dupstr(buf);
+
+    ret[3].name = "Hide layers below top";
+    ret[3].type = C_BOOLEAN;
+    ret[3].u.boolean.bval = params->hiddenlayers;
+
+    ret[4].name = NULL;
+    ret[4].type = C_END;
+
+    return ret;
 }
 
 static game_params *custom_params(const config_item *cfg)
 {
-    return NULL;
+    game_params *params = snew(game_params);
+
+    params->ncolours = atoi(cfg[0].u.string.sval);
+    params->ntubes = atoi(cfg[1].u.string.sval);
+    params->nlayers = atoi(cfg[2].u.string.sval);
+    params->hiddenlayers = cfg[3].u.boolean.bval;
+
+    return params;
 }
 
 static const char *validate_params(const game_params *params, bool full)
@@ -142,7 +207,7 @@ static const char *validate_params(const game_params *params, bool full)
     if (params->ncolours < 2) return "Colours must be at least 2";
     if (params->nlayers < 2) return "Layers must be at least 2";
     if (params->ntubes < 3) return "Tubes must be at least 3";
-    if (params->ncolours <= params->ncolours) return "There must be more tubes than colours";
+    if (params->ntubes <= params->ncolours) return "There must be more tubes than colours";
     return NULL;
 }
 
@@ -281,8 +346,10 @@ static float *game_colours(frontend *fe, int *ncolours)
          ret[(COL_0 + c) * 3 + 2] = (float)
             ((palette_default[c] & 0xff)) / 256.0F;
     }
-    for (c = 0; c < 3; c++)
+    for (c = 0; c < 3; c++) {
         ret[COL_TUBE * 3 + c] = 0.03125F;
+        ret[COL_HIDDEN * 3 + c] = 0.5F;
+    }
     frontend_default_colour(fe, &ret[COL_BACKGROUND * 3]);
 
     *ncolours = NCOLOURS;
@@ -369,7 +436,7 @@ const struct game thegame = {
     encode_params,
     free_params,
     dup_params,
-    false, game_configure, custom_params,
+    true, game_configure, custom_params,
     validate_params,
     new_game_desc,
     validate_desc,
@@ -377,7 +444,7 @@ const struct game thegame = {
     dup_game,
     free_game,
     false, solve_game,
-    false, game_can_format_as_text_now, game_text_format,
+    true, game_can_format_as_text_now, game_text_format,
     new_ui,
     free_ui,
     encode_ui,

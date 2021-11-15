@@ -493,6 +493,51 @@ static int get_tube_at(const game_state *state, const game_drawstate *ds,
     return tube;
 }
 
+static void get_tube_top(const game_state *state, int tube, int *color, int *number, int *empty)
+{
+    if (state->tubes[tube][0] == -1) {
+        *color = -1;
+        *number = 0;
+        if (empty) *empty = state->p.nlayers;
+    } else {
+        int layer;
+        for (layer = state->p.nlayers -1; layer >= 0; layer--) {
+            if ((*color = state->tubes[tube][layer]) != -1) {
+                if (empty) *empty = state->p.nlayers - layer - 1;
+                *number = 1;
+                while (--layer >= 0) {
+                    if (*color == state->tubes[tube][layer]) number++;
+                    else break;
+                }
+                return;
+            }
+        }
+    }
+}
+
+static int can_pour(const game_state *state, int tube_from, int tube_to)
+{
+    // easy cases: either one is empty
+    if (state->tubes[tube_from][0] == -1) return 0;
+    if (state->tubes[tube_to][0] == -1) {
+        int color, number;
+        get_tube_top(state, tube_from, &color, &number, 0);
+        return number;
+    }
+
+    // destination is full
+    if (state->tubes[tube_to][state->p.nlayers - 1] == -1) return 0;
+
+    {
+        int color_from, number_from, color_to, number_to, empty;
+        get_tube_top(state, tube_from, &color_from, &number_from, 0);
+        get_tube_top(state, tube_to, &color_to, &number_to, &empty);
+        if (color_from == color_to) return min(number_from, empty);
+    }
+
+    return 0;
+}
+
 static char *interpret_move(const game_state *state, game_ui *ui,
                             const game_drawstate *ds,
                             int x, int y, int button)
@@ -501,7 +546,20 @@ static char *interpret_move(const game_state *state, game_ui *ui,
         int tube = get_tube_at(state, ds, x, y);
         if (tube == -1) return NULL;
         if (tube == ui->selected) ui->selected = -1;
-        else ui->selected = tube;
+        else {
+            if (ui->selected != -1) {
+                int pouring = can_pour(state, ui->selected, tube);
+                if (pouring) {
+                    char buf[10];
+                    sprintf(buf, "p %d %d %d", ui->selected, tube, pouring);
+                    ui->selected = -1;
+                    return dupstr(buf);
+                }
+                // TODO flash?
+                return NULL;
+            }
+            ui->selected = tube;
+        }
         return UI_UPDATE;
     }
 
@@ -510,6 +568,10 @@ static char *interpret_move(const game_state *state, game_ui *ui,
 
 static game_state *execute_move(const game_state *state, const char *move)
 {
+    int tube_from, tube_to, number;
+    if (sscanf(move, "p %d %d %d", &tube_from, &tube_to, &number)) {
+        game_state *new_state = dup_game(state);
+    }
     return NULL;
 }
 
@@ -654,7 +716,8 @@ static void game_redraw(drawing *dr, game_drawstate *ds,
 
         if (did_update) {
             draw_rect_outline(dr, tx, ty, ds->tilesize, ds->tilesize * state->p.nlayers, COL_TUBE);
-            draw_update(dr, tx, ty_base, ds->tilesize, ds->tilesize * (state->p.nlayers + 1));
+            // outline draws slightly out of its box on some frontends
+            draw_update(dr, tx - 2, ty_base - 2, ds->tilesize + 4, ds->tilesize * (state->p.nlayers + 1) + 4);
         }
     }
 

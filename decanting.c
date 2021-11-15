@@ -124,7 +124,7 @@ static void decode_params(game_params *params, char const *string)
         params->ncolours = -1;
         while (*string && isdigit((unsigned char)*string)) string++;
     }
-    if (*string == '@') {
+    if (*string == 'w') {
         string++;
         if (params->ntubes == -1) {
             params->nlayers = params->ncolours;
@@ -145,10 +145,10 @@ static char *encode_params(const game_params *params, bool full)
     char data[256];
 
     if (full || params->ncolours + 2 != params->ntubes)
-        sprintf(data, "%dx%d@%d", params->ntubes, params->nlayers,
+        sprintf(data, "%dx%dw%d", params->ntubes, params->nlayers,
                 params->ncolours);
     else if (params->nlayers != 4)
-        sprintf(data, "%d@%d", params->nlayers, params->ncolours);
+        sprintf(data, "%dw%d", params->nlayers, params->ncolours);
     else
         sprintf(data, "%d", params->ncolours);
     
